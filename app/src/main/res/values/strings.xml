@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="app_name">Application Information</string>
+    <string name="dummy_button">Dummy Button</string>
+    <string name="dummy_content">DUMMY\nCONTENT</string>
+
+    <string name="copy_item">Copy</string>
+    <string name="help_item">Help</string>
+    <string name="refresh_item">Refresh</string>
+    <string name="save_app_info_item">Save to SD Card</string>
+    <string name="settings_item">Settings</string>
+
+
+    <!-- Utils -->
+    <string name="error">Error</string>
+    <string name="exception">Exception</string>
+    <string name="info">Info</string>
+    <string name="ok">OK</string>
+    <string name="warning">Warning</string>
+</resources>
