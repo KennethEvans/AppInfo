@@ -7,6 +7,7 @@
 
     <string name="copy_item">Copy</string>
     <string name="help_item">Help</string>
+    <string name="info_title">Help</string>
     <string name="refresh_item">Refresh</string>
     <string name="save_app_info_item">Save to SD Card</string>
     <string name="settings_item">Settings</string>

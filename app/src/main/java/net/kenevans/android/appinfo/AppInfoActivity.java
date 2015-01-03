@@ -39,6 +39,7 @@ import android.os.Environment;
 import android.os.StatFs;
 import android.text.ClipboardManager;
 import android.text.method.ScrollingMovementMethod;
+import android.util.DisplayMetrics;
 import android.util.Log;
 import android.util.SparseBooleanArray;
 import android.view.Menu;
@@ -115,6 +116,11 @@ public class AppInfoActivity extends Activity implements IConstants {
             case R.id.settings:
                 setOptions();
                 return true;
+            case R.id.help:
+                // DEBUG install issue
+                // test();
+                showHelp();
+                return true;
         }
         return false;
     }
@@ -188,6 +194,10 @@ public class AppInfoActivity extends Activity implements IConstants {
         protected void onPostExecute(String result) {
             super.onPostExecute(result);
             mTextView.setText(result);
+            // DEBUG
+            DisplayMetrics dm = new DisplayMetrics();
+            getWindowManager().getDefaultDisplay().getMetrics(dm);
+            Utils.infoMsg(AppInfoActivity.this, dm.toString() + "\n" + mTextView.getWidth() + " x " + mTextView.getHeight());
         }
     }
 
@@ -278,6 +288,23 @@ public class AppInfoActivity extends Activity implements IConstants {
                     }
                 });
         builder.create().show();
+    }
+
+    /**
+     * Show the help.
+     */
+    private void showHelp() {
+        try {
+            // Start theInfoActivity
+            Intent intent = new Intent();
+            intent.setClass(this, InfoActivity.class);
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
+                    | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+            intent.putExtra(INFO_URL, "file:///android_asset/appinfo.html");
+            startActivity(intent);
+        } catch (Exception ex) {
+            Utils.excMsg(this, "Error showing Help", ex);
+        }
     }
 
     /**

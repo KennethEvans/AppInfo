@@ -3,4 +3,5 @@
     <item android:id="@+id/save" android:title="@string/save_app_info_item" />
     <item android:id="@+id/copy" android:title="@string/copy_item" />
     <item android:id="@+id/settings" android:title="@string/settings_item" />
+    <item android:id="@+id/help" android:title="@string/help_item" />
 </menu>

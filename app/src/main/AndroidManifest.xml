@@ -20,6 +20,11 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <activity
+            android:name="net.kenevans.android.appinfo.InfoActivity"
+            android:theme="@android:style/Theme.Holo"
+            android:label="@string/info_title" >
+        </activity>
     </application>
 
 </manifest>
