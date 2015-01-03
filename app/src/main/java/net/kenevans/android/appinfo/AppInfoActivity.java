@@ -195,9 +195,9 @@ public class AppInfoActivity extends Activity implements IConstants {
             super.onPostExecute(result);
             mTextView.setText(result);
             // DEBUG
-            DisplayMetrics dm = new DisplayMetrics();
-            getWindowManager().getDefaultDisplay().getMetrics(dm);
-            Utils.infoMsg(AppInfoActivity.this, dm.toString() + "\n" + mTextView.getWidth() + " x " + mTextView.getHeight());
+//            DisplayMetrics dm = new DisplayMetrics();
+//            getWindowManager().getDefaultDisplay().getMetrics(dm);
+//            Utils.infoMsg(AppInfoActivity.this, dm.toString() + "\n" + mTextView.getWidth() + " x " + mTextView.getHeight());
         }
     }
 
