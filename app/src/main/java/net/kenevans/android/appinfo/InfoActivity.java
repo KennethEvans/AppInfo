@@ -48,7 +48,7 @@ public class InfoActivity extends Activity implements IConstants {
         // Get the URL
         Bundle extras = getIntent().getExtras();
         String url = extras != null ? extras.getString(INFO_URL) : null;
-        // TODO For now use the test page
+        // Use the test page here as the default. Actual page used will be in Intent.
         if (url == null || url.length() == 0) {
             url = DEFAULT_URL;
         }
