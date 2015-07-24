@@ -498,7 +498,7 @@ public class AppInfoActivity extends Activity implements IConstants {
      * @return
      */
     private boolean isSystemPackage(PackageInfo pkgInfo) {
-        return (pkgInfo.applicationInfo.flags & ApplicationInfo.FLAG_SYSTEM) != 0
+        return (pkgInfo.applicationInfo.flags & ApplicationInfo.FLAG_SYSTEM) != 0;
     }
 
     /**
