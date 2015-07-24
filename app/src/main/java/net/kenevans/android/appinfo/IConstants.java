@@ -21,29 +21,27 @@
 
 package net.kenevans.android.appinfo;
 
-import android.net.Uri;
-
 /**
  * Holds constant values used by several classes in the application.
  */
-public interface IConstants {
+interface IConstants {
     // Log tag
     /**
      * Tag to associate with log messages.
      */
-    public static final String TAG = "AppInfo";
+    String TAG = "AppInfo";
 
     // Information
     /**
      * Key for information URL sent to InfoActivity.
      */
-    public static final String INFO_URL = "InformationURL";
+    String INFO_URL = "InformationURL";
 
     /** KB/byte. Converts bytes to KB. */
-    public static final double KB = 1. / 1024.;
+    double KB = 1. / 1024.;
     /** MB/byte. Converts bytes to MB. */
-    public static final double MB = 1. / (1024. * 1024.);
+    double MB = 1. / (1024. * 1024.);
     /** GB/byte. Converts bytes to GB. */
-    public static final double GB = 1. / (1024. * 1024. * 1024.);
+    double GB = 1. / (1024. * 1024. * 1024.);
 
 }

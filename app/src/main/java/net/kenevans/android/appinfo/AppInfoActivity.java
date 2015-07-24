@@ -39,7 +39,6 @@ import android.os.Environment;
 import android.os.StatFs;
 import android.text.ClipboardManager;
 import android.text.method.ScrollingMovementMethod;
-import android.util.DisplayMetrics;
 import android.util.Log;
 import android.util.SparseBooleanArray;
 import android.view.Menu;
@@ -239,7 +238,6 @@ public class AppInfoActivity extends Activity implements IConstants {
                 Utils.infoMsg(this, "Wrote " + fileName);
             } else {
                 Utils.errMsg(this, "Cannot write to SD card");
-                return;
             }
         } catch (Exception ex) {
             Utils.excMsg(this, "Error saving to SD card", ex);
@@ -500,8 +498,7 @@ public class AppInfoActivity extends Activity implements IConstants {
      * @return
      */
     private boolean isSystemPackage(PackageInfo pkgInfo) {
-        return ((pkgInfo.applicationInfo.flags & ApplicationInfo.FLAG_SYSTEM) != 0) ? true
-                : false;
+        return (pkgInfo.applicationInfo.flags & ApplicationInfo.FLAG_SYSTEM) != 0
     }
 
     /**
