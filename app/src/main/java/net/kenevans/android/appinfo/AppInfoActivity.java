@@ -32,11 +32,13 @@ import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageInfo;
+import android.content.pm.PackageManager;
 import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.StatFs;
+import android.support.annotation.NonNull;
 import android.text.ClipboardManager;
 import android.text.method.ScrollingMovementMethod;
 import android.util.Log;
@@ -51,12 +53,17 @@ import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
+import java.security.Permissions;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.atomic.AtomicReference;
+
+import static android.R.attr.process;
+import static android.view.View.X;
 
 /**
  * Activity to display information about installed apps.
@@ -65,14 +72,16 @@ public class AppInfoActivity extends Activity implements IConstants {
     /**
      * Template for the name of the file written to the root of the SD card
      */
-    private static final String sdCardFileNameTemplate = "ApplicationInfo.%s.txt";
+    private static final String sdCardFileNameTemplate = "ApplicationInfo.%s" +
+            ".txt";
 
     private TextView mTextView;
-    public boolean doBuildInfo = false;
-    public boolean doMemoryInfo = false;
-    public boolean doNonSystemApps = true;
-    public boolean doSystemApps = false;
-    public boolean doPreferredApplications = false;
+    public boolean mDoBuildInfo = false;
+    public boolean mDoMemoryInfo = false;
+    public boolean mDoNonSystemApps = true;
+    public boolean mDoSystemApps = false;
+    public boolean mDoPreferredApplications = false;
+    public boolean mDoPermissions = false;
 
     /**
      * Called when the activity is first created.
@@ -128,24 +137,27 @@ public class AppInfoActivity extends Activity implements IConstants {
     protected void onPause() {
         super.onPause();
         SharedPreferences.Editor editor = getPreferences(MODE_PRIVATE).edit();
-        editor.putBoolean("doBuildInfo", doBuildInfo);
-        editor.putBoolean("doMemoryInfo", doMemoryInfo);
-        editor.putBoolean("doPreferredApplications", doPreferredApplications);
-        editor.putBoolean("doNonSystemApps", doNonSystemApps);
-        editor.putBoolean("doSystemApps", doSystemApps);
-        editor.commit();
+        editor.putBoolean("mDoBuildInfo", mDoBuildInfo);
+        editor.putBoolean("mDoMemoryInfo", mDoMemoryInfo);
+        editor.putBoolean("mDoPreferredApplications", mDoPreferredApplications);
+        editor.putBoolean("mDoNonSystemApps", mDoNonSystemApps);
+        editor.putBoolean("mDoSystemApps", mDoSystemApps);
+        editor.putBoolean("mDoPermissions", mDoPermissions);
+        editor.apply();
     }
 
     @Override
     protected void onResume() {
         super.onResume();
         SharedPreferences prefs = getPreferences(MODE_PRIVATE);
-        doBuildInfo = prefs.getBoolean("doBuildInfo", doBuildInfo);
-        doMemoryInfo = prefs.getBoolean("doMemoryInfo", doMemoryInfo);
-        doPreferredApplications = prefs.getBoolean("doPreferredApplications",
-                doPreferredApplications);
-        doNonSystemApps = prefs.getBoolean("doNonSystemApps", doNonSystemApps);
-        doSystemApps = prefs.getBoolean("doSystemApps", doSystemApps);
+        mDoBuildInfo = prefs.getBoolean("mDoBuildInfo", mDoBuildInfo);
+        mDoMemoryInfo = prefs.getBoolean("mDoMemoryInfo", mDoMemoryInfo);
+        mDoPreferredApplications = prefs.getBoolean("mDoPreferredApplications",
+                mDoPreferredApplications);
+        mDoNonSystemApps = prefs.getBoolean("mDoNonSystemApps",
+                mDoNonSystemApps);
+        mDoSystemApps = prefs.getBoolean("mDoSystemApps", mDoSystemApps);
+        mDoPermissions = prefs.getBoolean("mDoPermissions", mDoPermissions);
 
         refresh();
     }
@@ -158,7 +170,7 @@ public class AppInfoActivity extends Activity implements IConstants {
      */
     private void refresh() {
         try {
-            mTextView.setText("Processing...");
+            mTextView.setText(R.string.processing_msg);
             new RefreshTask().execute();
         } catch (Exception ex) {
             Utils.excMsg(this, "Error in Refresh", ex);
@@ -196,7 +208,8 @@ public class AppInfoActivity extends Activity implements IConstants {
             // DEBUG
 //            DisplayMetrics dm = new DisplayMetrics();
 //            getWindowManager().getDefaultDisplay().getMetrics(dm);
-//            Utils.infoMsg(AppInfoActivity.this, dm.toString() + "\n" + mTextView.getWidth() + " x " + mTextView.getHeight());
+//            Utils.infoMsg(AppInfoActivity.this, dm.toString() + "\n" +
+// mTextView.getWidth() + " x " + mTextView.getHeight());
         }
     }
 
@@ -205,7 +218,8 @@ public class AppInfoActivity extends Activity implements IConstants {
      */
     private void copyToClipboard() {
         try {
-            ClipboardManager cm = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+            ClipboardManager cm = (ClipboardManager) getSystemService
+                    (CLIPBOARD_SERVICE);
             TextView tv = (TextView) findViewById(R.id.textview);
             cm.setText(tv.getText());
         } catch (Exception ex) {
@@ -226,7 +240,7 @@ public class AppInfoActivity extends Activity implements IConstants {
                         Locale.US);
                 Date now = new Date();
                 String fileName = String.format(sdCardFileNameTemplate,
-                        formatter.format(now), now.getTime());
+                        formatter.format(now));
                 File file = new File(sdCardRoot, fileName);
                 FileWriter writer = new FileWriter(file);
                 out = new BufferedWriter(writer);
@@ -243,7 +257,7 @@ public class AppInfoActivity extends Activity implements IConstants {
             Utils.excMsg(this, "Error saving to SD card", ex);
         } finally {
             try {
-                out.close();
+                if (out != null) out.close();
             } catch (Exception ex) {
                 // Do nothing
             }
@@ -256,9 +270,11 @@ public class AppInfoActivity extends Activity implements IConstants {
     private void setOptions() {
         final CharSequence[] items = {"Build Information",
                 "Memory Information", "Preferred Applications",
-                "Downloaded Applications", "System Applications"};
-        boolean[] states = {doBuildInfo, doMemoryInfo,
-                doPreferredApplications, doNonSystemApps, doSystemApps};
+                "Downloaded Applications", "System Applications",
+                "Permissions"};
+        boolean[] states = {mDoBuildInfo, mDoMemoryInfo,
+                mDoPreferredApplications, mDoNonSystemApps, mDoSystemApps,
+                mDoPermissions};
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         builder.setTitle("Settings");
         builder.setMultiChoiceItems(items, states,
@@ -271,11 +287,12 @@ public class AppInfoActivity extends Activity implements IConstants {
             public void onClick(DialogInterface dialog, int id) {
                 SparseBooleanArray checked = ((AlertDialog) dialog)
                         .getListView().getCheckedItemPositions();
-                doBuildInfo = checked.get(0);
-                doMemoryInfo = checked.get(1);
-                doPreferredApplications = checked.get(2);
-                doNonSystemApps = checked.get(3);
-                doSystemApps = checked.get(4);
+                mDoBuildInfo = checked.get(0);
+                mDoMemoryInfo = checked.get(1);
+                mDoPreferredApplications = checked.get(2);
+                mDoNonSystemApps = checked.get(3);
+                mDoSystemApps = checked.get(4);
+                mDoPermissions = checked.get(5);
                 refresh();
             }
         });
@@ -308,29 +325,29 @@ public class AppInfoActivity extends Activity implements IConstants {
     /**
      * Gets the Build information.
      *
-     * @return
+     * @return The build information.
      */
     private String getBuildInfo() {
-        StringBuffer buf = new StringBuffer();
-        buf.append("VERSION.RELEASE=" + Build.VERSION.RELEASE + "\n");
-        buf.append("VERSION.INCREMENTAL=" + Build.VERSION.INCREMENTAL + "\n");
-        buf.append("VERSION.SDK=" + Build.VERSION.SDK + "\n");
-        buf.append("BOARD=" + Build.BOARD + "\n");
-        buf.append("BRAND=" + Build.BRAND + "\n");
-        buf.append("DEVICE=" + Build.DEVICE + "\n");
-        buf.append("FINGERPRINT=" + Build.FINGERPRINT + "\n");
-        buf.append("HOST=" + Build.HOST + "\n");
-        buf.append("ID=" + Build.ID + "\n");
-        return buf.toString();
+        AtomicReference<String> info = new AtomicReference<>(("VERSION" +
+                ".RELEASE=" + Build.VERSION.RELEASE + "\n") +
+                "VERSION.INCREMENTAL=" + Build.VERSION.INCREMENTAL + "\n" +
+                "VERSION.SDK=" + Build.VERSION.SDK_INT + "\n" +
+                "BOARD=" + Build.BOARD + "\n" +
+                "BRAND=" + Build.BRAND + "\n" +
+                "DEVICE=" + Build.DEVICE + "\n" +
+                "FINGERPRINT=" + Build.FINGERPRINT + "\n" +
+                "HOST=" + Build.HOST + "\n" +
+                "ID=" + Build.ID + "\n");
+        return info.get();
     }
 
     /**
      * Gets the Memory information.
      *
-     * @return
+     * @return YThe memory information.
      */
     public String getMemoryInfo() {
-        StringBuffer buf = new StringBuffer();
+        StringBuilder builder = new StringBuilder();
 
         // Internal Memory
         File path = Environment.getDataDirectory();
@@ -341,22 +358,29 @@ public class AppInfoActivity extends Activity implements IConstants {
         double free = (double) stat.getFreeBlocks() * blockSize;
         double used = total - available;
         String format = ": %.0f KB = %.2f MB = %.2f GB\n";
-        buf.append("Internal Memory\n");
-        buf.append(String.format("  Total" + format, total * KB, total * MB,
+        builder.append("Internal Memory\n");
+        builder.append(String.format(Locale.US, "  Total" + format, total *
+                        KB, total * MB,
                 total * GB));
-        buf.append(String.format("  Used" + format, used * KB, used * MB, used
-                * GB));
-        buf.append(String.format("  Available" + format, available * KB,
+        builder.append(String.format(Locale.US, "  Used" + format, used * KB,
+                used * MB,
+                used
+                        * GB));
+        builder.append(String.format(Locale.US, "  Available" + format,
+                available * KB,
                 available * MB, available * GB));
-        buf.append(String.format("  Free" + format, free * KB, free * MB, free
-                * GB));
-        buf.append(String.format("  Block Size: %d Bytes\n", blockSize));
+        builder.append(String.format(Locale.US, "  Free" + format, free * KB,
+                free * MB,
+                free
+                        * GB));
+        builder.append(String.format(Locale.US, "  Block Size: %d Bytes\n",
+                blockSize));
 
         // External Memory
-        buf.append("\nExternal Memory\n");
+        builder.append("\nExternal Memory\n");
         if (!Environment.getExternalStorageState().equals(
                 Environment.MEDIA_MOUNTED)) {
-            buf.append("  No Extenal Memory\n");
+            builder.append("  No Extenal Memory\n");
         } else {
             path = Environment.getExternalStorageDirectory();
             stat = new StatFs(path.getPath());
@@ -365,45 +389,56 @@ public class AppInfoActivity extends Activity implements IConstants {
             available = (double) stat.getAvailableBlocks() * blockSize;
             free = (double) stat.getFreeBlocks() * blockSize;
             used = total - available;
-            buf.append(String.format("  Total" + format, total * KB,
+            builder.append(String.format(Locale.US, "  Total" + format, total
+                            * KB,
                     total * MB, total * GB));
-            buf.append(String.format("  Used" + format, used * KB, used * MB,
+            builder.append(String.format(Locale.US, "  Used" + format, used *
+                            KB, used *
+                            MB,
                     used * GB));
-            buf.append(String.format("  Available" + format, available * KB,
+            builder.append(String.format(Locale.US, "  Available" + format,
+                    available * KB,
                     available * MB, available * GB));
-            buf.append(String.format("  Free" + format, free * KB, free * MB,
+            builder.append(String.format(Locale.US, "  Free" + format, free *
+                            KB, free *
+                            MB,
                     free * GB));
-            buf.append(String.format("  Block Size: %d Bytes\n", blockSize));
+            builder.append(String.format(Locale.US, "  Block Size: %d Bytes\n",
+                    blockSize));
         }
 
         // RAM
         MemoryInfo mi = new MemoryInfo();
-        ActivityManager activityManager = (ActivityManager) getSystemService(ACTIVITY_SERVICE);
+        ActivityManager activityManager = (ActivityManager) getSystemService
+                (ACTIVITY_SERVICE);
         activityManager.getMemoryInfo(mi);
         available = (double) mi.availMem;
         double threshold = (double) mi.threshold;
         boolean low = mi.lowMemory;
-        buf.append("\nRAM\n");
+        builder.append("\nRAM\n");
         Long ram = getTotalRAM();
         if (ram == null) {
-            buf.append("  Total: Not found\n");
+            builder.append("  Total: Not found\n");
         } else {
             total = ram / KB;
             used = total - available;
-            buf.append(String.format("  Total" + format, total * KB,
+            builder.append(String.format("  Total" + format, total * KB,
                     total * MB, total * GB));
-            buf.append(String.format("  Used" + format, used * KB, used * MB,
+            builder.append(String.format("  Used" + format, used * KB, used *
+                            MB,
                     used * GB));
         }
-        buf.append(String.format("  Available" + format, available * KB,
+        builder.append(String.format(Locale.US, "  Available" + format,
+                available * KB,
                 available * MB, available * GB));
-        buf.append(String.format("  Threshold" + format, threshold * KB,
+        builder.append(String.format(Locale.US, "  Threshold" + format,
+                threshold * KB,
                 threshold * MB, threshold * GB));
         if (low) {
-            buf.append("  Memory is low\n");
+            builder.append("  Memory is low\n");
         }
 
-        return buf.toString();
+        return builder.toString();
     }
 
     /**
@@ -494,32 +529,33 @@ public class AppInfoActivity extends Activity implements IConstants {
      * User-installed packages (Market or otherwise) should not be denoted as
      * system packages.
      *
-     * @param pkgInfo
-     * @return
+     * @param pi The PackageInfo.
+     * @return If the PackageInfo is a system package.
      */
-    private boolean isSystemPackage(PackageInfo pkgInfo) {
-        return (pkgInfo.applicationInfo.flags & ApplicationInfo.FLAG_SYSTEM) != 0;
+    private boolean isSystemPackage(PackageInfo pi) {
+        return (pi.applicationInfo.flags & ApplicationInfo.FLAG_SYSTEM)
+                != 0;
     }
 
     /**
      * Gets a List of PInfo's for the installed packages.
      *
-     * @param getSysPackages
-     * @return
+     * @param getSysPackages Whether to use system packages.
+     * @return List of installed apps.
      */
     private ArrayList<PInfo> getInstalledApps(boolean getSysPackages) {
-        ArrayList<PInfo> res = new ArrayList<PInfo>();
-        List<PackageInfo> packages = getPackageManager()
+        ArrayList<PInfo> res = new ArrayList<>();
+        List<PackageInfo> packageInfos = getPackageManager()
                 .getInstalledPackages(0);
-        PInfo newInfo = null;
-        PackageInfo pkg = null;
-        for (int i = 0; i < packages.size(); i++) {
-            pkg = packages.get(i);
-            if ((!getSysPackages) && (pkg.versionName == null)) {
+        PInfo newPi;
+        PackageInfo pi;
+        for (int i = 0; i < packageInfos.size(); i++) {
+            pi = packageInfos.get(i);
+            if ((!getSysPackages) && (pi.versionName == null)) {
                 continue;
             }
-            newInfo = new PInfo(pkg);
-            res.add(newInfo);
+            newPi = new PInfo(pi, mDoPermissions);
+            res.add(newPi);
         }
         Collections.sort(res);
         return res;
@@ -528,81 +564,82 @@ public class AppInfoActivity extends Activity implements IConstants {
     /**
      * Gets a List of preferred packages.
      *
-     * @return
+     * @return The list of preferred packages.
      */
     private ArrayList<PInfo> getPreferredApps() {
-        ArrayList<PInfo> res = new ArrayList<PInfo>();
+        ArrayList<PInfo> res = new ArrayList<>();
         // This returns nothing
-        // List<PackageInfo> packages = getPackageManager()
+        // List<PackageInfo> packageInfos = getPackageManager()
         // .getPreferredPackages(0);
-        List<PackageInfo> packages = getPackageManager()
+        List<PackageInfo> packageInfos = getPackageManager()
                 .getInstalledPackages(0);
         Log.d(TAG,
                 this.getClass().getSimpleName()
-                        + ".getPreferredApps: installed packages size="
-                        + packages.size());
+                        + ".getPreferredApps: installed packageInfos size="
+                        + packageInfos.size());
 
-        List<IntentFilter> filters = new ArrayList<IntentFilter>();
-        List<ComponentName> activities = new ArrayList<ComponentName>();
-        PInfo newInfo = null;
-        PackageInfo pkg = null;
-        int nPref = 0, nFilters = 0, nActivities = 0;
-        for (int i = 0; i < packages.size(); i++) {
-            pkg = packages.get(i);
-            if (pkg.versionName == null) {
+        List<IntentFilter> filters = new ArrayList<>();
+        List<ComponentName> activities = new ArrayList<>();
+        PInfo newPi;
+        PackageInfo pi;
+        int nPref, nFilters, nActivities;
+        for (int i = 0; i < packageInfos.size(); i++) {
+            pi = packageInfos.get(i);
+            if (pi.versionName == null) {
                 continue;
             }
             nPref = getPackageManager().getPreferredActivities(filters,
-                    activities, pkg.packageName);
+                    activities, pi.packageName);
             nFilters = filters.size();
             nActivities = activities.size();
-            Log.d(TAG, pkg.packageName + " nPref=" + nPref + " nFilters="
+            Log.d(TAG, pi.packageName + " nPref=" + nPref + " nFilters="
                     + nFilters + " nActivities=" + nActivities);
             if (nPref > 0 || nFilters > 0 || nActivities > 0) {
-                newInfo = new PInfo(pkg);
-                newInfo.setInfo("");
-                // newInfo.setInfo(pkg.packageName + " nPref=" + nPref
+                // Don't do permissions for these
+                newPi = new PInfo(pi, false);
+                newPi.setInfo("");
+                // newPi.setInfo(pkg.packageName + " nPref=" + nPref
                 // + " nFilters=" + nFilters + " nActivities="
                 // + nActivities + "\n");
                 for (IntentFilter filter : filters) {
-                    // newInfo.appendInfo("IntentFilter: " + " actions="
+                    // newPi.appendInfo("IntentFilter: " + " actions="
                     // + filter.countActions() + " categories="
                     // + filter.countCategories() + " types="
                     // + filter.countDataTypes() + " authorities="
                     // + filter.countDataAuthorities() + " paths="
                     // + filter.countDataPaths() + " schemes="
                     // + filter.countDataSchemes() + "\n");
-                    newInfo.appendInfo("IntentFilter:\n");
+                    newPi.appendInfo("IntentFilter:\n");
                     for (int j = 0; j < filter.countActions(); j++) {
-                        newInfo.appendInfo("    action: " + filter.getAction(j)
+                        newPi.appendInfo("    action: " + filter.getAction(j)
                                 + "\n");
                     }
                     for (int j = 0; j < filter.countCategories(); j++) {
-                        newInfo.appendInfo("    category: "
+                        newPi.appendInfo("    category: "
                                 + filter.getCategory(j) + "\n");
                     }
                     for (int j = 0; j < filter.countDataTypes(); j++) {
-                        newInfo.appendInfo("    type: " + filter.getDataType(j)
+                        newPi.appendInfo("    type: " + filter.getDataType(j)
                                 + "\n");
                     }
                     for (int j = 0; j < filter.countDataAuthorities(); j++) {
-                        newInfo.appendInfo("    data authority: "
+                        newPi.appendInfo("    data authority: "
                                 + filter.getDataAuthority(j) + "\n");
                     }
                     for (int j = 0; j < filter.countDataPaths(); j++) {
-                        newInfo.appendInfo("    data path: "
+                        newPi.appendInfo("    data path: "
                                 + filter.getDataPath(j) + "\n");
                     }
                     for (int j = 0; j < filter.countDataSchemes(); j++) {
-                        newInfo.appendInfo("    data path: "
+                        newPi.appendInfo("    data path: "
                                 + filter.getDataScheme(j) + "\n");
                     }
                     // for (ComponentName activity : activities) {
-                    // newInfo.appendInfo("activity="
+                    // newPi.appendInfo("activity="
                     // + activity.flattenToString() + "\n");
                     // }
                 }
-                res.add(newInfo);
+                res.add(newPi);
             }
         }
         Collections.sort(res);
@@ -642,7 +679,7 @@ public class AppInfoActivity extends Activity implements IConstants {
     /**
      * Gets information about the applications.
      *
-     * @return
+     * @return Information about the applications.
      */
     private String getAppsInfo() {
         String info = "Application Information\n";
@@ -664,18 +701,18 @@ public class AppInfoActivity extends Activity implements IConstants {
         // info += formatter.format(now) + "\n\n";
 
         // Build information
-        if (doBuildInfo) {
+        if (mDoBuildInfo) {
             info += "Build Information\n\n";
             info += getBuildInfo() + "\n";
         }
 
         // Memory information
-        if (doMemoryInfo) {
+        if (mDoMemoryInfo) {
             info += "Memory Information\n\n";
             info += getMemoryInfo() + "\n";
         }
 
-        if (doPreferredApplications) {
+        if (mDoPreferredApplications) {
             info += "Preferred Applications (Launch by Default)\n\n";
             try {
                 // false = no system packages
@@ -695,7 +732,7 @@ public class AppInfoActivity extends Activity implements IConstants {
         }
 
         // Non-system applications information
-        if (doNonSystemApps) {
+        if (mDoNonSystemApps) {
             info += "Downloaded Applications\n\n";
             try {
                 // false = no system packages
@@ -715,7 +752,7 @@ public class AppInfoActivity extends Activity implements IConstants {
         }
 
         // System applications information
-        if (doSystemApps) {
+        if (mDoSystemApps) {
             info += "System Applications\n\n";
             try {
                 // false = no system packages
@@ -746,20 +783,51 @@ public class AppInfoActivity extends Activity implements IConstants {
         private String appname = "";
         private String pname = "";
         private String versionName = "";
+        private String permissionsInfo = "";
         private String info = null;
-        boolean isSystem;
+        private boolean isSystem;
 
         // private int versionCode = 0;
         // private Drawable icon;
 
-        public PInfo(PackageInfo pkg) {
-            appname = pkg.applicationInfo.loadLabel(getPackageManager())
+        private PInfo(PackageInfo pi, boolean doPermissions) {
+            appname = pi.applicationInfo.loadLabel(getPackageManager())
                     .toString();
-            pname = pkg.packageName;
-            versionName = pkg.versionName;
+            pname = pi.packageName;
+            versionName = pi.versionName;
             // versionCode = pkg.versionCode;
-            isSystem = isSystemPackage(pkg);
+            isSystem = isSystemPackage(pi);
             // icon = pkg.applicationInfo.loadIcon(getPackageManager());
+            if (doPermissions) {
+                permissionsInfo = "Permissions:\n";
+                try {
+                    // Permissions is not filled in for the incoming PackageInfo
+                    // Need to get a new PackageInfo asking for permissions
+                    PackageInfo pi1 = getPackageManager().getPackageInfo
+                            (pname, PackageManager.GET_PERMISSIONS);
+                    String[] permissions = pi1.requestedPermissions;
+                    // Note: permissions seems to be  null rather than a
+                    // zero-length  array if there are no permissions
+                    if (permissions != null) {
+                        boolean granted;
+                        for (int i = 0; i < permissions.length; i++) {
+                            granted = true;
+                            if (Build.VERSION.SDK_INT >= 16) {
+                                if ((pi1.requestedPermissionsFlags[i] &
+                                        PackageInfo
+                                                .REQUESTED_PERMISSION_GRANTED)
+                                        == 0) {
+                                    granted = false;
+                                }
+                            }
+                            permissionsInfo += "  " + (granted ? "" : "X ") +
+                                    permissions[i] + "\n";
+                        }
+                    }
+                } catch (Exception ex) {
+                    permissionsInfo += "  Error: " + ex.toString() + "\n";
+                }
+            }
         }
 
         private String prettyPrint() {
@@ -767,6 +835,7 @@ public class AppInfoActivity extends Activity implements IConstants {
             info += appname + "\n";
             info += pname + "\n";
             info += "Version: " + versionName + "\n";
+            info += permissionsInfo;
             if (this.info != null) {
                 info += this.info + "\n";
             }
@@ -781,7 +850,7 @@ public class AppInfoActivity extends Activity implements IConstants {
         }
 
         @Override
-        public int compareTo(PInfo another) {
+        public int compareTo(@NonNull PInfo another) {
             return this.appname.compareTo(another.appname);
         }
 
@@ -789,11 +858,11 @@ public class AppInfoActivity extends Activity implements IConstants {
             return info;
         }
 
-        public void setInfo(String info) {
+        private void setInfo(String info) {
             this.info = info;
         }
 
-        public void appendInfo(String info) {
+        private void appendInfo(String info) {
             this.info += info;
         }
 
