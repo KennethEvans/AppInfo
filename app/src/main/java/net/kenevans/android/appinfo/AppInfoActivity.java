@@ -39,8 +39,6 @@ import android.os.Bundle;
 import android.os.Environment;
 import android.os.StatFs;
 import android.support.annotation.NonNull;
-import android.text.ClipboardManager;
-import android.text.method.ScrollingMovementMethod;
 import android.util.Log;
 import android.util.SparseBooleanArray;
 import android.view.Menu;
@@ -53,7 +51,6 @@ import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
-import java.security.Permissions;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -61,9 +58,6 @@ import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicReference;
-
-import static android.R.attr.process;
-import static android.view.View.X;
 
 /**
  * Activity to display information about installed apps.
@@ -94,9 +88,8 @@ public class AppInfoActivity extends Activity implements IConstants {
         // requestWindowFeature(Window.FEATURE_INDETERMINATE_PROGRESS);
 
         // Get the TextView
-        mTextView = (TextView) findViewById(R.id.textview);
+        mTextView = findViewById(R.id.textview);
         // Make it scroll
-        mTextView.setMovementMethod(new ScrollingMovementMethod());
 
         // refresh will be called in onResume
     }
@@ -218,10 +211,13 @@ public class AppInfoActivity extends Activity implements IConstants {
      */
     private void copyToClipboard() {
         try {
-            ClipboardManager cm = (ClipboardManager) getSystemService
+            android.content.ClipboardManager cm = (android.content
+                    .ClipboardManager) getSystemService
                     (CLIPBOARD_SERVICE);
-            TextView tv = (TextView) findViewById(R.id.textview);
-            cm.setText(tv.getText());
+            TextView tv = findViewById(R.id.textview);
+            android.content.ClipData clip = android.content.ClipData
+                    .newPlainText("AppInfo", tv.getText());
+            cm.setPrimaryClip(clip);
         } catch (Exception ex) {
             Utils.excMsg(this, "Error setting Clipboard", ex);
         }
@@ -344,7 +340,7 @@ public class AppInfoActivity extends Activity implements IConstants {
     /**
      * Gets the Memory information.
      *
-     * @return YThe memory information.
+     * @return The memory information.
      */
     public String getMemoryInfo() {
         StringBuilder builder = new StringBuilder();
@@ -352,10 +348,19 @@ public class AppInfoActivity extends Activity implements IConstants {
         // Internal Memory
         File path = Environment.getDataDirectory();
         StatFs stat = new StatFs(path.getPath());
-        int blockSize = stat.getBlockSize();
-        double total = (double) stat.getBlockCount() * blockSize;
-        double available = (double) stat.getAvailableBlocks() * blockSize;
-        double free = (double) stat.getFreeBlocks() * blockSize;
+        long blockSize;
+        double total, available, free;
+        if (Build.VERSION.SDK_INT >= 18) {
+            blockSize = stat.getBlockSizeLong();
+            total = (double) stat.getBlockCountLong() * blockSize;
+            available = (double) stat.getAvailableBlocksLong() * blockSize;
+            free = (double) stat.getFreeBlocksLong() * blockSize;
+        } else {
+            blockSize = stat.getBlockSize();
+            total = (double) stat.getBlockCount() * blockSize;
+            available = (double) stat.getAvailableBlocks() * blockSize;
+            free = (double) stat.getFreeBlocks() * blockSize;
+        }
         double used = total - available;
         String format = ": %.0f KB = %.2f MB = %.2f GB\n";
         builder.append("Internal Memory\n");
@@ -384,10 +389,17 @@ public class AppInfoActivity extends Activity implements IConstants {
         } else {
             path = Environment.getExternalStorageDirectory();
             stat = new StatFs(path.getPath());
-            blockSize = stat.getBlockSize();
-            total = (double) stat.getBlockCount() * blockSize;
-            available = (double) stat.getAvailableBlocks() * blockSize;
-            free = (double) stat.getFreeBlocks() * blockSize;
+            if (Build.VERSION.SDK_INT >= 18) {
+                blockSize = stat.getBlockSizeLong();
+                total = (double) stat.getBlockCountLong() * blockSize;
+                available = (double) stat.getAvailableBlocksLong() * blockSize;
+                free = (double) stat.getFreeBlocksLong() * blockSize;
+            } else {
+                blockSize = stat.getBlockSize();
+                total = (double) stat.getBlockCount() * blockSize;
+                available = (double) stat.getAvailableBlocks() * blockSize;
+                free = (double) stat.getFreeBlocks() * blockSize;
+            }
             used = total - available;
             builder.append(String.format(Locale.US, "  Total" + format, total
                             * KB,
