@@ -21,7 +21,6 @@ package net.kenevans.android.appinfo;
 //TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 //SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-import android.app.Activity;
 import android.app.ActivityManager;
 import android.app.ActivityManager.MemoryInfo;
 import android.app.AlertDialog;
@@ -39,6 +38,7 @@ import android.os.Bundle;
 import android.os.Environment;
 import android.os.StatFs;
 import android.support.annotation.NonNull;
+import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.util.SparseBooleanArray;
 import android.view.Menu;
@@ -62,7 +62,7 @@ import java.util.concurrent.atomic.AtomicReference;
 /**
  * Activity to display information about installed apps.
  */
-public class AppInfoActivity extends Activity implements IConstants {
+public class AppInfoActivity extends AppCompatActivity implements IConstants {
     /**
      * Template for the name of the file written to the root of the SD card
      */
@@ -84,6 +84,9 @@ public class AppInfoActivity extends Activity implements IConstants {
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_app_info);
+        getSupportActionBar().setDisplayShowHomeEnabled(true);
+        getSupportActionBar().setLogo(R.drawable.ic_launcher);
+        getSupportActionBar().setDisplayUseLogoEnabled(true);
 
         // requestWindowFeature(Window.FEATURE_INDETERMINATE_PROGRESS);
 
@@ -356,10 +359,10 @@ public class AppInfoActivity extends Activity implements IConstants {
             available = (double) stat.getAvailableBlocksLong() * blockSize;
             free = (double) stat.getFreeBlocksLong() * blockSize;
         } else {
-            blockSize = stat.getBlockSize();
-            total = (double) stat.getBlockCount() * blockSize;
-            available = (double) stat.getAvailableBlocks() * blockSize;
-            free = (double) stat.getFreeBlocks() * blockSize;
+            blockSize = stat.getBlockSizeLong();
+            total = (double) stat.getBlockCountLong() * blockSize;
+            available = (double) stat.getAvailableBlocksLong() * blockSize;
+            free = (double) stat.getFreeBlocksLong() * blockSize;
         }
         double used = total - available;
         String format = ": %.0f KB = %.2f MB = %.2f GB\n";
@@ -395,10 +398,10 @@ public class AppInfoActivity extends Activity implements IConstants {
                 available = (double) stat.getAvailableBlocksLong() * blockSize;
                 free = (double) stat.getFreeBlocksLong() * blockSize;
             } else {
-                blockSize = stat.getBlockSize();
-                total = (double) stat.getBlockCount() * blockSize;
-                available = (double) stat.getAvailableBlocks() * blockSize;
-                free = (double) stat.getFreeBlocks() * blockSize;
+                blockSize = stat.getBlockSizeLong();
+                total = (double) stat.getBlockCountLong() * blockSize;
+                available = (double) stat.getAvailableBlocksLong() * blockSize;
+                free = (double) stat.getFreeBlocksLong() * blockSize;
             }
             used = total - available;
             builder.append(String.format(Locale.US, "  Total" + format, total

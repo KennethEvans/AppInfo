@@ -23,13 +23,14 @@ package net.kenevans.android.appinfo;
 
 import android.app.Activity;
 import android.os.Bundle;
+import android.support.v7.app.AppCompatActivity;
 import android.view.KeyEvent;
 import android.webkit.WebView;
 
 /**
  * Class to display a local web page.
  */
-public class InfoActivity extends Activity implements IConstants {
+public class InfoActivity extends AppCompatActivity implements IConstants {
     private static final String DEFAULT_URL = "file:///android_asset/test.html";
     private WebView mWebView;
 
@@ -41,7 +42,7 @@ public class InfoActivity extends Activity implements IConstants {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_info);
 
-        mWebView = (WebView) findViewById(R.id.webview);
+        mWebView = findViewById(R.id.webview);
         // mWebView.getSettings().setJavaScriptEnabled(true);
         // mWebView.setWebViewClient(new LocalWebViewClient());
 
