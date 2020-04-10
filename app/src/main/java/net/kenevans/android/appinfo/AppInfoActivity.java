@@ -248,7 +248,7 @@ public class AppInfoActivity extends AppCompatActivity implements IConstants {
                 if (charSeq.length() == 0) {
                     Utils.warnMsg(this, "The file written is empty");
                 }
-                Utils.infoMsg(this, "Wrote " + fileName);
+                Utils.infoMsg(this, "Wrote " + file.getPath());
             } else {
                 Utils.errMsg(this, "Cannot write to SD card");
             }
