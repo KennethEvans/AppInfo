@@ -25,11 +25,15 @@ package net.kenevans.android.appinfo;
  * Holds constant values used by several classes in the application.
  */
 interface IConstants {
-    // Log tag
     /**
      * Tag to associate with log messages.
      */
     String TAG = "AppInfo";
+
+    /**
+     * Result code for creating a document.
+     */
+    int CREATE_DOCUMENT = 10;
 
     // Information
     /**

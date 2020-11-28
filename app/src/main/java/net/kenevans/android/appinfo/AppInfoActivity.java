@@ -21,6 +21,7 @@ package net.kenevans.android.appinfo;
 //TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 //SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+import android.app.Activity;
 import android.app.ActivityManager;
 import android.app.ActivityManager.MemoryInfo;
 import android.app.AlertDialog;
@@ -32,13 +33,14 @@ import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
+import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
+import android.os.ParcelFileDescriptor;
 import android.os.StatFs;
-import androidx.annotation.NonNull;
-import androidx.appcompat.app.AppCompatActivity;
+import android.provider.DocumentsContract;
 import android.util.Log;
 import android.util.SparseBooleanArray;
 import android.view.Menu;
@@ -47,10 +49,11 @@ import android.view.MenuItem;
 import android.widget.TextView;
 
 import java.io.BufferedReader;
-import java.io.BufferedWriter;
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.FileReader;
-import java.io.FileWriter;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -58,6 +61,9 @@ import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicReference;
+
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.AppCompatActivity;
 
 /**
  * Activity to display information about installed apps.
@@ -68,6 +74,7 @@ public class AppInfoActivity extends AppCompatActivity implements IConstants {
      */
     private static final String sdCardFileNameTemplate = "ApplicationInfo.%s" +
             ".txt";
+    private static final String SD_CARD_SUGGESTED_DIR = "Application Info";
 
     private TextView mTextView;
     public boolean mDoBuildInfo = false;
@@ -107,24 +114,24 @@ public class AppInfoActivity extends AppCompatActivity implements IConstants {
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         int id = item.getItemId();
-        switch (id) {
-            case R.id.refresh:
-                refresh();
-                return true;
-            case R.id.copy:
-                copyToClipboard();
-                return true;
-            case R.id.save:
-                save();
-                return true;
-            case R.id.settings:
-                setOptions();
-                return true;
-            case R.id.help:
-                // DEBUG install issue
-                // test();
-                showHelp();
-                return true;
+        if (id == R.id.refresh) {
+            refresh();
+            return true;
+        } else if (id == R.id.copy) {
+            copyToClipboard();
+            return true;
+        } else if (id == R.id.save) {
+            save();
+            return true;
+        }
+        if (id == R.id.settings) {
+            setOptions();
+            return true;
+        } else if (id == R.id.help) {
+            // DEBUG install issue
+            // test();
+            showHelp();
+            return true;
         }
         return false;
     }
@@ -156,6 +163,102 @@ public class AppInfoActivity extends AppCompatActivity implements IConstants {
         mDoPermissions = prefs.getBoolean("mDoPermissions", mDoPermissions);
 
         refresh();
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode,
+                                    Intent intent) {
+        super.onActivityResult(requestCode, resultCode, intent);
+        // DEBUG
+        Log.d(TAG, this.getClass().getSimpleName()
+                + ".onActivityResult: requestCode=" + requestCode
+                + " resultCode=" + resultCode);
+        if (requestCode == CREATE_DOCUMENT && resultCode == Activity.RESULT_OK) {
+            Uri uri;
+            if (intent != null) {
+                uri = intent.getData();
+                List<String> segments = uri.getPathSegments();
+                Uri.Builder builder = new Uri.Builder();
+                for (int i = 0; i < segments.size() - 1; i++) {
+                    builder.appendPath(segments.get(i));
+                }
+                Uri parent = builder.build();
+                Log.d(TAG, "uri=" + uri + " parent=" + parent);
+                doSave(uri);
+            }
+        }
+    }
+
+    /**
+     * Asks for the name of the save file
+     */
+    private void save() {
+        try {
+            Date now = new Date();
+            String format = "yyyy-MM-dd-HHmmss";
+            SimpleDateFormat formatter = new SimpleDateFormat(format,
+                    Locale.US);
+            String fileName = String.format(sdCardFileNameTemplate,
+                    formatter.format(now));
+
+            Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+            intent.addCategory(Intent.CATEGORY_OPENABLE);
+            intent.setType("text/plain");
+            intent.putExtra(Intent.EXTRA_TITLE, fileName);
+            // Set initial directory
+            if (Build.VERSION.SDK_INT >= 28) {
+                File sdCardRoot = Environment.getExternalStorageDirectory();
+                File dir = new File(sdCardRoot, SD_CARD_SUGGESTED_DIR);
+                Uri.Builder builder = new Uri.Builder();
+                builder.path(sdCardRoot.getPath())
+                        .appendPath(SD_CARD_SUGGESTED_DIR);
+                Uri uri = builder.build();
+                Uri uriFile = Uri.fromFile(dir);
+                intent.putExtra(DocumentsContract.EXTRA_INITIAL_URI,
+                        uri);
+                intent.putExtra(DocumentsContract.EXTRA_PROMPT,
+                        "This is a prompt");
+                intent.putExtra(DocumentsContract.EXTRA_INFO,
+                        "Some extra info yu should know");
+                Log.d(TAG, this.getClass().getSimpleName()
+                        + ".save: uri=" + uri
+                        + " uriFile=" + uriFile);
+            }
+            startActivityForResult(intent, CREATE_DOCUMENT);
+        } catch (Exception ex) {
+            Utils.excMsg(this, "Error requesting saving to SD card", ex);
+        }
+    }
+
+    /**
+     * Saves the info to the SD card
+     *
+     * @param uri The Uri to use for writing.
+     */
+    private void doSave(Uri uri) {
+        FileOutputStream writer = null;
+        try {
+            Charset charset = StandardCharsets.UTF_8;
+            ParcelFileDescriptor pfd = getContentResolver().
+                    openFileDescriptor(uri, "w");
+            writer =
+                    new FileOutputStream(pfd.getFileDescriptor());
+            CharSequence charSeq = mTextView.getText();
+            byte[] bytes = charSeq.toString().getBytes(charset);
+            writer.write(bytes);
+            if (charSeq.length() == 0) {
+                Utils.warnMsg(this, "The file written is empty");
+            }
+            Utils.infoMsg(this, "Wrote " + uri.getPath());
+        } catch (Exception ex) {
+            Utils.excMsg(this, "Error saving to SD card", ex);
+        } finally {
+            try {
+                if (writer != null) writer.close();
+            } catch (Exception ex) {
+                // Do nothing
+            }
+        }
     }
 
     /**
@@ -223,43 +326,6 @@ public class AppInfoActivity extends AppCompatActivity implements IConstants {
             cm.setPrimaryClip(clip);
         } catch (Exception ex) {
             Utils.excMsg(this, "Error setting Clipboard", ex);
-        }
-    }
-
-    /**
-     * Saves the info to the SD card
-     */
-    private void save() {
-        BufferedWriter out = null;
-        try {
-            File sdCardRoot = Environment.getExternalStorageDirectory();
-            if (sdCardRoot.canWrite()) {
-                String format = "yyyy-MM-dd-HHmmss";
-                SimpleDateFormat formatter = new SimpleDateFormat(format,
-                        Locale.US);
-                Date now = new Date();
-                String fileName = String.format(sdCardFileNameTemplate,
-                        formatter.format(now));
-                File file = new File(sdCardRoot, fileName);
-                FileWriter writer = new FileWriter(file);
-                out = new BufferedWriter(writer);
-                CharSequence charSeq = mTextView.getText();
-                out.write(charSeq.toString());
-                if (charSeq.length() == 0) {
-                    Utils.warnMsg(this, "The file written is empty");
-                }
-                Utils.infoMsg(this, "Wrote " + file.getPath());
-            } else {
-                Utils.errMsg(this, "Cannot write to SD card");
-            }
-        } catch (Exception ex) {
-            Utils.excMsg(this, "Error saving to SD card", ex);
-        } finally {
-            try {
-                if (out != null) out.close();
-            } catch (Exception ex) {
-                // Do nothing
-            }
         }
     }
 
@@ -353,17 +419,10 @@ public class AppInfoActivity extends AppCompatActivity implements IConstants {
         StatFs stat = new StatFs(path.getPath());
         long blockSize;
         double total, available, free;
-        if (Build.VERSION.SDK_INT >= 18) {
-            blockSize = stat.getBlockSizeLong();
-            total = (double) stat.getBlockCountLong() * blockSize;
-            available = (double) stat.getAvailableBlocksLong() * blockSize;
-            free = (double) stat.getFreeBlocksLong() * blockSize;
-        } else {
-            blockSize = stat.getBlockSizeLong();
-            total = (double) stat.getBlockCountLong() * blockSize;
-            available = (double) stat.getAvailableBlocksLong() * blockSize;
-            free = (double) stat.getFreeBlocksLong() * blockSize;
-        }
+        blockSize = stat.getBlockSizeLong();
+        total = (double) stat.getBlockCountLong() * blockSize;
+        available = (double) stat.getAvailableBlocksLong() * blockSize;
+        free = (double) stat.getFreeBlocksLong() * blockSize;
         double used = total - available;
         String format = ": %.0f KB = %.2f MB = %.2f GB\n";
         builder.append("Internal Memory\n");
@@ -388,21 +447,14 @@ public class AppInfoActivity extends AppCompatActivity implements IConstants {
         builder.append("\nExternal Memory\n");
         if (!Environment.getExternalStorageState().equals(
                 Environment.MEDIA_MOUNTED)) {
-            builder.append("  No Extenal Memory\n");
+            builder.append("  No External Memory\n");
         } else {
             path = Environment.getExternalStorageDirectory();
             stat = new StatFs(path.getPath());
-            if (Build.VERSION.SDK_INT >= 18) {
-                blockSize = stat.getBlockSizeLong();
-                total = (double) stat.getBlockCountLong() * blockSize;
-                available = (double) stat.getAvailableBlocksLong() * blockSize;
-                free = (double) stat.getFreeBlocksLong() * blockSize;
-            } else {
-                blockSize = stat.getBlockSizeLong();
-                total = (double) stat.getBlockCountLong() * blockSize;
-                available = (double) stat.getAvailableBlocksLong() * blockSize;
-                free = (double) stat.getFreeBlocksLong() * blockSize;
-            }
+            blockSize = stat.getBlockSizeLong();
+            total = (double) stat.getBlockCountLong() * blockSize;
+            available = (double) stat.getAvailableBlocksLong() * blockSize;
+            free = (double) stat.getFreeBlocksLong() * blockSize;
             used = total - available;
             builder.append(String.format(Locale.US, "  Total" + format, total
                             * KB,
@@ -437,9 +489,11 @@ public class AppInfoActivity extends AppCompatActivity implements IConstants {
         } else {
             total = ram / KB;
             used = total - available;
-            builder.append(String.format("  Total" + format, total * KB,
+            builder.append(String.format(Locale.US, "  Total" + format,
+                    total * KB,
                     total * MB, total * GB));
-            builder.append(String.format("  Used" + format, used * KB, used *
+            builder.append(String.format(Locale.US, "  Used" + format,
+                    used * KB, used *
                             MB,
                     used * GB));
         }
@@ -463,25 +517,16 @@ public class AppInfoActivity extends AppCompatActivity implements IConstants {
      */
     public static Long getTotalRAM() {
         String path = "/proc/meminfo";
-        BufferedReader br = null;
         String[] tokens;
-        try {
-            br = new BufferedReader(new FileReader(path));
+        try (BufferedReader br = new BufferedReader(new FileReader(path))) {
             // Assume it is in the first line and assume it is in kb
             String line = br.readLine();
             tokens = line.split("\\s+");
             return Long.parseLong(tokens[1]);
         } catch (Exception ex) {
             return null;
-        } finally {
-            if (br != null) {
-                try {
-                    br.close();
-                } catch (Exception ex) {
-                    // Do nothing
-                }
-            }
         }
+        // Do nothing
     }
 
     // /**
@@ -540,7 +585,7 @@ public class AppInfoActivity extends AppCompatActivity implements IConstants {
     // }
 
     /**
-     * Return whether the given PackgeInfo represents a system package or not.
+     * Return whether the given PackageInfo represents a system package or not.
      * User-installed packages (Market or otherwise) should not be denoted as
      * system packages.
      *
@@ -795,12 +840,12 @@ public class AppInfoActivity extends AppCompatActivity implements IConstants {
      * Class to manage a single PackageInfo.
      */
     class PInfo implements Comparable<PInfo> {
-        private String appname = "";
-        private String pname = "";
-        private String versionName = "";
+        private final String appname;
+        private final String pname;
+        private final String versionName;
         private String permissionsInfo = "";
         private String info = null;
-        private boolean isSystem;
+        private final boolean isSystem;
 
         // private int versionCode = 0;
         // private Drawable icon;
@@ -826,15 +871,9 @@ public class AppInfoActivity extends AppCompatActivity implements IConstants {
                     if (permissions != null) {
                         boolean granted;
                         for (int i = 0; i < permissions.length; i++) {
-                            granted = true;
-                            if (Build.VERSION.SDK_INT >= 16) {
-                                if ((pi1.requestedPermissionsFlags[i] &
-                                        PackageInfo
-                                                .REQUESTED_PERMISSION_GRANTED)
-                                        == 0) {
-                                    granted = false;
-                                }
-                            }
+                            granted = (pi1.requestedPermissionsFlags[i] &
+                                    PackageInfo
+                                            .REQUESTED_PERMISSION_GRANTED) != 0;
                             permissionsInfo += "  " + (granted ? "" : "X ") +
                                     permissions[i] + "\n";
                         }

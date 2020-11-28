@@ -2,8 +2,6 @@
 <resources>
 
     <string name="app_name">Application Information</string>
-    <string name="dummy_button">Dummy Button</string>
-    <string name="dummy_content">DUMMY\nCONTENT</string>
 
     <string name="copy_item">Copy</string>
     <string name="help_item">Help</string>
