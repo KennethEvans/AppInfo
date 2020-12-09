@@ -40,7 +40,6 @@ import android.os.Bundle;
 import android.os.Environment;
 import android.os.ParcelFileDescriptor;
 import android.os.StatFs;
-import android.provider.DocumentsContract;
 import android.util.Log;
 import android.util.SparseBooleanArray;
 import android.view.Menu;
@@ -205,25 +204,7 @@ public class AppInfoActivity extends AppCompatActivity implements IConstants {
             intent.addCategory(Intent.CATEGORY_OPENABLE);
             intent.setType("text/plain");
             intent.putExtra(Intent.EXTRA_TITLE, fileName);
-            // Set initial directory
-            if (Build.VERSION.SDK_INT >= 28) {
-                File sdCardRoot = Environment.getExternalStorageDirectory();
-                File dir = new File(sdCardRoot, SD_CARD_SUGGESTED_DIR);
-                Uri.Builder builder = new Uri.Builder();
-                builder.path(sdCardRoot.getPath())
-                        .appendPath(SD_CARD_SUGGESTED_DIR);
-                Uri uri = builder.build();
-                Uri uriFile = Uri.fromFile(dir);
-                intent.putExtra(DocumentsContract.EXTRA_INITIAL_URI,
-                        uri);
-                intent.putExtra(DocumentsContract.EXTRA_PROMPT,
-                        "This is a prompt");
-                intent.putExtra(DocumentsContract.EXTRA_INFO,
-                        "Some extra info yu should know");
-                Log.d(TAG, this.getClass().getSimpleName()
-                        + ".save: uri=" + uri
-                        + " uriFile=" + uriFile);
-            }
+//        intent.putExtra(DocumentsContract.EXTRA_INITIAL_URI, uriToLoad);
             startActivityForResult(intent, CREATE_DOCUMENT);
         } catch (Exception ex) {
             Utils.excMsg(this, "Error requesting saving to SD card", ex);
@@ -231,7 +212,7 @@ public class AppInfoActivity extends AppCompatActivity implements IConstants {
     }
 
     /**
-     * Saves the info to the SD card
+     * Does the actual writing for the save.
      *
      * @param uri The Uri to use for writing.
      */
@@ -657,7 +638,6 @@ public class AppInfoActivity extends AppCompatActivity implements IConstants {
             if (nPref > 0 || nFilters > 0 || nActivities > 0) {
                 // Don't do permissions for these
                 newPi = new PInfo(pi, false);
-                newPi.setInfo("");
                 // newPi.setInfo(pkg.packageName + " nPref=" + nPref
                 // + " nFilters=" + nFilters + " nActivities="
                 // + nActivities + "\n");
@@ -742,38 +722,40 @@ public class AppInfoActivity extends AppCompatActivity implements IConstants {
      * @return Information about the applications.
      */
     private String getAppsInfo() {
-        String info = "Application Information\n";
+        StringBuilder sb = new StringBuilder();
+        sb.append("Application Information\n");
 
         // DEBUG
         // info +=
         // "\n\n------------------------------------------------------\n";
-        // info += getPreferredAppInfo();
-        // info += "------------------------------------------------------\n\n";
+        // sb.append(getPreferredAppInfo();
+        // sb.append
+        // ("------------------------------------------------------\n\n";
 
         // Date
         Date now = new Date();
         // This has the most hope of giving a result that is locale dependent.
         // At one time it had the UTC offset wrong, but seems to work now.
-        info += now + "\n\n";
+        sb.append(now).append("\n\n");
         // This allows more explicit formatting.
         // SimpleDateFormat formatter = new SimpleDateFormat(
         // "MMM dd, yyyy HH:mm:ss z");
-        // info += formatter.format(now) + "\n\n";
+        // sb.append(formatter.format(now) + "\n\n");
 
         // Build information
         if (mDoBuildInfo) {
-            info += "Build Information\n\n";
-            info += getBuildInfo() + "\n";
+            sb.append("Build Information\n\n");
+            sb.append(getBuildInfo()).append("\n");
         }
 
         // Memory information
         if (mDoMemoryInfo) {
-            info += "Memory Information\n\n";
-            info += getMemoryInfo() + "\n";
+            sb.append("Memory Information\n\n");
+            sb.append(getMemoryInfo()).append("\n");
         }
 
         if (mDoPreferredApplications) {
-            info += "Preferred Applications (Launch by Default)\n\n";
+            sb.append("Preferred Applications (Launch by Default)\n\n");
             try {
                 // false = no system packages
                 ArrayList<PInfo> apps = getPreferredApps();
@@ -782,18 +764,18 @@ public class AppInfoActivity extends AppCompatActivity implements IConstants {
                 for (int i = 0; i < max; i++) {
                     app = apps.get(i);
                     // No "\n" here
-                    info += app.prettyPrint();
+                    sb.append(app.prettyPrint());
                 }
             } catch (Exception ex) {
-                info += "Error gettingPreferred Applications:\n\n";
-                info += ex.getMessage() + "\n\n";
+                sb.append("Error gettingPreferred Applications:\n\n");
+                sb.append(ex.getMessage()).append("\n\n");
                 Log.d(TAG, "Error gettingPreferred Applications:", ex);
             }
         }
 
         // Non-system applications information
         if (mDoNonSystemApps) {
-            info += "Downloaded Applications\n\n";
+            sb.append("Downloaded Applications\n\n");
             try {
                 // false = no system packages
                 ArrayList<PInfo> apps = getInstalledApps(false);
@@ -801,19 +783,19 @@ public class AppInfoActivity extends AppCompatActivity implements IConstants {
                 PInfo app;
                 for (int i = 0; i < max; i++) {
                     app = apps.get(i);
-                    if (!app.isSystem) {
-                        info += app.prettyPrint() + "\n";
+                    if (!app.mIsSystem) {
+                        sb.append(app.prettyPrint());
                     }
                 }
             } catch (Exception ex) {
-                info += "Error getting Application Information:\n";
-                info += ex.getMessage() + "\n\n";
+                sb.append("Error getting Application Information:\n");
+                sb.append(ex.getMessage()).append("\n\n");
             }
         }
 
         // System applications information
         if (mDoSystemApps) {
-            info += "System Applications\n\n";
+            sb.append("System Applications\n\n");
             try {
                 // false = no system packages
                 ArrayList<PInfo> apps = getInstalledApps(false);
@@ -821,19 +803,19 @@ public class AppInfoActivity extends AppCompatActivity implements IConstants {
                 PInfo app;
                 for (int i = 0; i < max; i++) {
                     app = apps.get(i);
-                    if (app.isSystem) {
-                        info += app.prettyPrint() + "\n";
+                    if (app.mIsSystem) {
+                        sb.append(app.prettyPrint()).append("\n");
                     }
                 }
             } catch (Exception ex) {
-                info += "Error getting System Application Information:\n";
-                info += ex.getMessage() + "\n\n";
+                sb.append("Error getting System Application Information:\n");
+                sb.append(ex.getMessage()).append("\n\n");
             }
         }
 
         // setProgressBarIndeterminateVisibility(false);
 
-        return info;
+        return sb.toString();
     }
 
     /**
@@ -843,9 +825,9 @@ public class AppInfoActivity extends AppCompatActivity implements IConstants {
         private final String appname;
         private final String pname;
         private final String versionName;
-        private String permissionsInfo = "";
-        private String info = null;
-        private final boolean isSystem;
+        private StringBuffer mPermissionsInfo;
+        private StringBuffer mStringBuffer;
+        private final boolean mIsSystem;
 
         // private int versionCode = 0;
         // private Drawable icon;
@@ -856,10 +838,12 @@ public class AppInfoActivity extends AppCompatActivity implements IConstants {
             pname = pi.packageName;
             versionName = pi.versionName;
             // versionCode = pkg.versionCode;
-            isSystem = isSystemPackage(pi);
+            mIsSystem = isSystemPackage(pi);
             // icon = pkg.applicationInfo.loadIcon(getPackageManager());
+            mStringBuffer = new StringBuffer();
             if (doPermissions) {
-                permissionsInfo = "Permissions:\n";
+                mPermissionsInfo = new StringBuffer();
+                mPermissionsInfo.append("Permissions:\n");
                 try {
                     // Permissions is not filled in for the incoming PackageInfo
                     // Need to get a new PackageInfo asking for permissions
@@ -874,50 +858,46 @@ public class AppInfoActivity extends AppCompatActivity implements IConstants {
                             granted = (pi1.requestedPermissionsFlags[i] &
                                     PackageInfo
                                             .REQUESTED_PERMISSION_GRANTED) != 0;
-                            permissionsInfo += "  " + (granted ? "" : "X ") +
-                                    permissions[i] + "\n";
+                            mPermissionsInfo.append("  ").append(granted ?
+                                    "" : "X ").append(permissions[i]).append(
+                                    "\n");
                         }
                     }
                 } catch (Exception ex) {
-                    permissionsInfo += "  Error: " + ex.toString() + "\n";
+                    mPermissionsInfo.append("  Error: ").append(ex.toString())
+                            .append("\n");
                 }
             }
         }
 
         private String prettyPrint() {
-            String info = "";
-            info += appname + "\n";
-            info += pname + "\n";
-            info += "Version: " + versionName + "\n";
-            info += permissionsInfo;
-            if (this.info != null) {
-                info += this.info + "\n";
+            StringBuilder sb = new StringBuilder();
+            sb.append(appname).append("\n");
+            sb.append(pname).append("\n");
+            sb.append("Version: ").append(versionName).append("\n");
+            if (this.mPermissionsInfo != null) {
+                sb.append(mPermissionsInfo.toString()).append("\n");
             }
-            // info += "Version code: " + versionCode + "\n";
+            if (this.mStringBuffer != null) {
+                sb.append(mStringBuffer.toString());
+            }
+            // sb.append("Version code: " + versionCode + "\n");
             // DEBUG
             // Log.d(TAG, info);
-            return info;
+            return sb.toString();
         }
 
-        public boolean isSystem() {
-            return isSystem;
-        }
+//        public boolean ismIsSystem() {
+//            return mIsSystem;
+//        }
 
         @Override
         public int compareTo(@NonNull PInfo another) {
             return this.appname.compareTo(another.appname);
         }
 
-        public String getInfo() {
-            return info;
-        }
-
-        private void setInfo(String info) {
-            this.info = info;
-        }
-
         private void appendInfo(String info) {
-            this.info += info;
+            this.mStringBuffer.append(info);
         }
 
     }
