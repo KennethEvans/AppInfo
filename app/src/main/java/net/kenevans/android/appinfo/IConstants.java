@@ -35,6 +35,15 @@ interface IConstants {
      */
     int CREATE_DOCUMENT = 10;
 
+    // Preferences
+    String PREF_FILTER = "filter";
+    String PREF_DO_BUILD = "doBuildInfo";
+    String PREF_DO_MEMORY = "doMemoryInfo";
+    String PREF_DO_PREFERRED_APPLICATIONS = "doPreferredApplications";
+    String PREF_DO_NON_SYSTEM = "doNonSystemApps";
+    String PREF_DO_SYSTEM = "doSystemApps";
+    String PREF_DO_PERMISSIONS = "doPermissions";
+
     // Information
     /**
      * Key for information URL sent to InfoActivity.

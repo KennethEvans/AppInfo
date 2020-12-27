@@ -45,6 +45,7 @@ import android.util.SparseBooleanArray;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
+import android.widget.EditText;
 import android.widget.TextView;
 
 import java.io.BufferedReader;
@@ -82,6 +83,7 @@ public class AppInfoActivity extends AppCompatActivity implements IConstants {
     public boolean mDoSystemApps = false;
     public boolean mDoPreferredApplications = false;
     public boolean mDoPermissions = false;
+    public String mFilter = null;
 
     /**
      * Called when the activity is first created.
@@ -122,8 +124,10 @@ public class AppInfoActivity extends AppCompatActivity implements IConstants {
         } else if (id == R.id.save) {
             save();
             return true;
-        }
-        if (id == R.id.settings) {
+        } else if (id == R.id.filter) {
+            getFilter();
+            return true;
+        } else if (id == R.id.settings) {
             setOptions();
             return true;
         } else if (id == R.id.help) {
@@ -139,12 +143,13 @@ public class AppInfoActivity extends AppCompatActivity implements IConstants {
     protected void onPause() {
         super.onPause();
         SharedPreferences.Editor editor = getPreferences(MODE_PRIVATE).edit();
-        editor.putBoolean("mDoBuildInfo", mDoBuildInfo);
-        editor.putBoolean("mDoMemoryInfo", mDoMemoryInfo);
-        editor.putBoolean("mDoPreferredApplications", mDoPreferredApplications);
-        editor.putBoolean("mDoNonSystemApps", mDoNonSystemApps);
-        editor.putBoolean("mDoSystemApps", mDoSystemApps);
-        editor.putBoolean("mDoPermissions", mDoPermissions);
+        editor.putBoolean(PREF_DO_BUILD, mDoBuildInfo);
+        editor.putBoolean(PREF_DO_MEMORY, mDoMemoryInfo);
+        editor.putBoolean(PREF_DO_PREFERRED_APPLICATIONS,
+                mDoPreferredApplications);
+        editor.putBoolean(PREF_DO_NON_SYSTEM, mDoNonSystemApps);
+        editor.putBoolean(PREF_DO_SYSTEM, mDoSystemApps);
+        editor.putBoolean(PREF_DO_PERMISSIONS, mDoPermissions);
         editor.apply();
     }
 
@@ -152,16 +157,33 @@ public class AppInfoActivity extends AppCompatActivity implements IConstants {
     protected void onResume() {
         super.onResume();
         SharedPreferences prefs = getPreferences(MODE_PRIVATE);
-        mDoBuildInfo = prefs.getBoolean("mDoBuildInfo", mDoBuildInfo);
-        mDoMemoryInfo = prefs.getBoolean("mDoMemoryInfo", mDoMemoryInfo);
-        mDoPreferredApplications = prefs.getBoolean("mDoPreferredApplications",
-                mDoPreferredApplications);
-        mDoNonSystemApps = prefs.getBoolean("mDoNonSystemApps",
+        mDoBuildInfo = prefs.getBoolean(PREF_DO_BUILD, mDoBuildInfo);
+        mDoMemoryInfo = prefs.getBoolean(PREF_DO_MEMORY, mDoMemoryInfo);
+        mDoPreferredApplications =
+                prefs.getBoolean(PREF_DO_PREFERRED_APPLICATIONS,
+                        mDoPreferredApplications);
+        mDoNonSystemApps = prefs.getBoolean(PREF_DO_NON_SYSTEM,
                 mDoNonSystemApps);
-        mDoSystemApps = prefs.getBoolean("mDoSystemApps", mDoSystemApps);
-        mDoPermissions = prefs.getBoolean("mDoPermissions", mDoPermissions);
+        mDoSystemApps = prefs.getBoolean(PREF_DO_SYSTEM, mDoSystemApps);
+        mDoPermissions = prefs.getBoolean(PREF_DO_PERMISSIONS, mDoPermissions);
+        mFilter = prefs.getString(PREF_FILTER, mFilter);
 
-        refresh();
+        String currentText = mTextView.getText().toString();
+        if(currentText == null || currentText.isEmpty()) {
+            refresh();
+        }
+    }
+
+    @Override
+    protected void onSaveInstanceState(@NonNull Bundle outState) {
+        super.onSaveInstanceState(outState);
+        outState.putCharSequence("savedText", mTextView.getText());
+    }
+
+    @Override
+    protected void onRestoreInstanceState(Bundle savedState) {
+        super.onRestoreInstanceState(savedState);
+        mTextView.setText(savedState.getCharSequence("savedText"));
     }
 
     @Override
@@ -308,6 +330,56 @@ public class AppInfoActivity extends AppCompatActivity implements IConstants {
         } catch (Exception ex) {
             Utils.excMsg(this, "Error setting Clipboard", ex);
         }
+    }
+
+    /**
+     * Sets the filter.
+     */
+    private void getFilter() {
+        AlertDialog.Builder alert = new AlertDialog.Builder(this);
+        alert.setTitle(R.string.filter_item);
+
+        // Set an EditText view to get user input
+        final EditText input = new EditText(this);
+        // Set it with the current value
+        SharedPreferences prefs = getPreferences(MODE_PRIVATE);
+        String filter = prefs.getString(PREF_FILTER, null);
+        if (filter != null) {
+            input.setText(filter);
+        }
+        alert.setView(input);
+        alert.setPositiveButton("Ok", new DialogInterface.OnClickListener() {
+            public void onClick(DialogInterface dialog, int whichButton) {
+                // Only use lower case for now
+                String value = input.getText().toString().toLowerCase();
+                SharedPreferences.Editor editor = getPreferences(MODE_PRIVATE)
+                        .edit();
+                editor.putString(PREF_FILTER, value);
+                editor.apply();
+                mFilter = value;
+                refresh();
+            }
+        });
+        alert.setNeutralButton("No Filter",
+                new DialogInterface.OnClickListener() {
+                    public void onClick(DialogInterface dialog, int
+                            whichButton) {
+                        SharedPreferences.Editor editor =
+                                getPreferences(MODE_PRIVATE)
+                                        .edit();
+                        editor.putString(PREF_FILTER, null);
+                        editor.apply();
+                        mFilter = null;
+                        refresh();
+                    }
+                });
+        alert.setNegativeButton("Cancel",
+                new DialogInterface.OnClickListener() {
+                    public void onClick(DialogInterface dialog, int id) {
+                        dialog.cancel();
+                    }
+                });
+        alert.show();
     }
 
     /**
@@ -595,6 +667,12 @@ public class AppInfoActivity extends AppCompatActivity implements IConstants {
             if ((!getSysPackages) && (pi.versionName == null)) {
                 continue;
             }
+            if (mFilter != null && !mFilter.isEmpty()) {
+                if (!pi.versionName.toLowerCase().contains(mFilter)
+                        && !pi.packageName.toLowerCase().contains(mFilter)) {
+                    continue;
+                }
+            }
             newPi = new PInfo(pi, mDoPermissions);
             res.add(newPi);
         }
@@ -628,6 +706,12 @@ public class AppInfoActivity extends AppCompatActivity implements IConstants {
             pi = packageInfos.get(i);
             if (pi.versionName == null) {
                 continue;
+            }
+            if (mFilter != null && !mFilter.isEmpty()) {
+                if (!pi.versionName.toLowerCase().contains(mFilter)
+                        && !pi.packageName.toLowerCase().contains(mFilter)) {
+                    continue;
+                }
             }
             nPref = getPackageManager().getPreferredActivities(filters,
                     activities, pi.packageName);
@@ -671,7 +755,7 @@ public class AppInfoActivity extends AppCompatActivity implements IConstants {
                                 + filter.getDataPath(j) + "\n");
                     }
                     for (int j = 0; j < filter.countDataSchemes(); j++) {
-                        newPi.appendInfo("    data path: "
+                        newPi.appendInfo("    data scheme: "
                                 + filter.getDataScheme(j) + "\n");
                     }
                     // for (ComponentName activity : activities) {
@@ -875,11 +959,14 @@ public class AppInfoActivity extends AppCompatActivity implements IConstants {
             sb.append(appname).append("\n");
             sb.append(pname).append("\n");
             sb.append("Version: ").append(versionName).append("\n");
+            // Either have mPermissions or mStringBuffer, not both
             if (this.mPermissionsInfo != null) {
                 sb.append(mPermissionsInfo.toString()).append("\n");
             }
-            if (this.mStringBuffer != null) {
-                sb.append(mStringBuffer.toString());
+            if (this.mStringBuffer != null && mStringBuffer.length() > 0) {
+                sb.append(mStringBuffer.toString()).append("\n");
+            } else if (this.mPermissionsInfo == null) {
+                sb.append("\n");
             }
             // sb.append("Version code: " + versionCode + "\n");
             // DEBUG

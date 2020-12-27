@@ -10,7 +10,7 @@
     <string name="processing_msg">Processing&#8230;</string>
     <string name="save_app_info_item">Save to SD Card</string>
     <string name="settings_item">Settings</string>
-
+    <string name="filter_item">Filter</string>
 
     <!-- Utils -->
     <string name="error">Error</string>
