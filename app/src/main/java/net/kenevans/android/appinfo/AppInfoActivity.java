@@ -21,12 +21,10 @@ package net.kenevans.android.appinfo;
 //TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 //SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-import android.app.Activity;
 import android.app.ActivityManager;
 import android.app.ActivityManager.MemoryInfo;
 import android.app.AlertDialog;
 import android.content.ComponentName;
-import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
@@ -62,6 +60,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicReference;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 
@@ -74,7 +74,6 @@ public class AppInfoActivity extends AppCompatActivity implements IConstants {
      */
     private static final String sdCardFileNameTemplate = "ApplicationInfo.%s" +
             ".txt";
-    private static final String SD_CARD_SUGGESTED_DIR = "Application Info";
 
     private TextView mTextView;
     public boolean mDoBuildInfo = false;
@@ -85,11 +84,40 @@ public class AppInfoActivity extends AppCompatActivity implements IConstants {
     public boolean mDoPermissions = false;
     public String mFilter = null;
 
+    // Launcher for saving text output
+    private final ActivityResultLauncher<Intent> saveTextLauncher =
+            registerForActivityResult(
+                    new ActivityResultContracts.StartActivityForResult(),
+                    result -> {
+                        Log.d(TAG, this.getClass().getSimpleName()
+                                + ".saveTextLauncher");
+                        Intent intent = result.getData();
+                        Uri uri;
+                        if (intent == null) {
+                            Utils.errMsg(this, "Got invalid Uri for creating " +
+                                    "GPX file");
+                        } else {
+                            uri = intent.getData();
+                            if (uri != null) {
+                                List<String> segments = uri.getPathSegments();
+                                Uri.Builder builder = new Uri.Builder();
+                                for (int i = 0; i < segments.size() - 1; i++) {
+                                    builder.appendPath(segments.get(i));
+                                }
+                                Uri parent = builder.build();
+                                Log.d(TAG, "uri=" + uri + " parent=" + parent);
+                                doSave(uri);
+                            }
+                        }
+                    });
+
     /**
      * Called when the activity is first created.
      */
     @Override
     public void onCreate(Bundle savedInstanceState) {
+        Log.d(TAG, this.getClass().getSimpleName()
+                + ".onCreate");
         super.onCreate(savedInstanceState);
         // Capture global exceptions
         Thread.setDefaultUncaughtExceptionHandler((paramThread,
@@ -149,6 +177,8 @@ public class AppInfoActivity extends AppCompatActivity implements IConstants {
 
     @Override
     protected void onPause() {
+        Log.d(TAG, this.getClass().getSimpleName()
+                + ".onPause");
         super.onPause();
         SharedPreferences.Editor editor = getPreferences(MODE_PRIVATE).edit();
         editor.putBoolean(PREF_DO_BUILD, mDoBuildInfo);
@@ -163,6 +193,8 @@ public class AppInfoActivity extends AppCompatActivity implements IConstants {
 
     @Override
     protected void onResume() {
+        Log.d(TAG, this.getClass().getSimpleName()
+                + ".onResume");
         super.onResume();
         SharedPreferences prefs = getPreferences(MODE_PRIVATE);
         mDoBuildInfo = prefs.getBoolean(PREF_DO_BUILD, mDoBuildInfo);
@@ -177,46 +209,28 @@ public class AppInfoActivity extends AppCompatActivity implements IConstants {
         mFilter = prefs.getString(PREF_FILTER, mFilter);
 
         String currentText = mTextView.getText().toString();
-        if(currentText == null || currentText.isEmpty()) {
+        Log.d(TAG, "  currentText: length=" + currentText.length());
+        if (currentText.isEmpty()) {
             refresh();
         }
     }
 
-    @Override
-    protected void onSaveInstanceState(@NonNull Bundle outState) {
-        super.onSaveInstanceState(outState);
-        outState.putCharSequence("savedText", mTextView.getText());
-    }
-
-    @Override
-    protected void onRestoreInstanceState(Bundle savedState) {
-        super.onRestoreInstanceState(savedState);
-        mTextView.setText(savedState.getCharSequence("savedText"));
-    }
-
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode,
-                                    Intent intent) {
-        super.onActivityResult(requestCode, resultCode, intent);
-        // DEBUG
-        Log.d(TAG, this.getClass().getSimpleName()
-                + ".onActivityResult: requestCode=" + requestCode
-                + " resultCode=" + resultCode);
-        if (requestCode == CREATE_DOCUMENT && resultCode == Activity.RESULT_OK) {
-            Uri uri;
-            if (intent != null) {
-                uri = intent.getData();
-                List<String> segments = uri.getPathSegments();
-                Uri.Builder builder = new Uri.Builder();
-                for (int i = 0; i < segments.size() - 1; i++) {
-                    builder.appendPath(segments.get(i));
-                }
-                Uri parent = builder.build();
-                Log.d(TAG, "uri=" + uri + " parent=" + parent);
-                doSave(uri);
-            }
-        }
-    }
+    // These are causing TransactionTooLargeException
+//    @Override
+//    protected void onSaveInstanceState(@NonNull Bundle outState) {
+//        Log.d(TAG, this.getClass().getSimpleName()
+//                + ".onSaveInstanceState");
+//        super.onSaveInstanceState(outState);
+//        outState.putCharSequence("savedText", mTextView.getText());
+//    }
+//
+//    @Override
+//    protected void onRestoreInstanceState(Bundle savedState) {
+//        Log.d(TAG, this.getClass().getSimpleName()
+//                + ".onRestoreInstanceState");
+//        super.onRestoreInstanceState(savedState);
+//        mTextView.setText(savedState.getCharSequence("savedText"));
+//    }
 
     /**
      * Asks for the name of the save file
@@ -235,7 +249,7 @@ public class AppInfoActivity extends AppCompatActivity implements IConstants {
             intent.setType("text/plain");
             intent.putExtra(Intent.EXTRA_TITLE, fileName);
 //        intent.putExtra(DocumentsContract.EXTRA_INITIAL_URI, uriToLoad);
-            startActivityForResult(intent, CREATE_DOCUMENT);
+            saveTextLauncher.launch(intent);
         } catch (Exception ex) {
             Utils.excMsg(this, "Error requesting saving to SD card", ex);
         }
@@ -247,6 +261,8 @@ public class AppInfoActivity extends AppCompatActivity implements IConstants {
      * @param uri The Uri to use for writing.
      */
     private void doSave(Uri uri) {
+        Log.d(TAG, this.getClass().getSimpleName()
+                + ".doSave");
         FileOutputStream writer = null;
         try {
             Charset charset = StandardCharsets.UTF_8;
@@ -356,37 +372,28 @@ public class AppInfoActivity extends AppCompatActivity implements IConstants {
             input.setText(filter);
         }
         alert.setView(input);
-        alert.setPositiveButton("Ok", new DialogInterface.OnClickListener() {
-            public void onClick(DialogInterface dialog, int whichButton) {
-                // Only use lower case for now
-                String value = input.getText().toString().toLowerCase();
-                SharedPreferences.Editor editor = getPreferences(MODE_PRIVATE)
-                        .edit();
-                editor.putString(PREF_FILTER, value);
-                editor.apply();
-                mFilter = value;
-                refresh();
-            }
+        alert.setPositiveButton("Ok", (dialog, whichButton) -> {
+            // Only use lower case for now
+            String value = input.getText().toString().toLowerCase();
+            SharedPreferences.Editor editor = getPreferences(MODE_PRIVATE)
+                    .edit();
+            editor.putString(PREF_FILTER, value);
+            editor.apply();
+            mFilter = value;
+            refresh();
         });
         alert.setNeutralButton("No Filter",
-                new DialogInterface.OnClickListener() {
-                    public void onClick(DialogInterface dialog, int
-                            whichButton) {
-                        SharedPreferences.Editor editor =
-                                getPreferences(MODE_PRIVATE)
-                                        .edit();
-                        editor.putString(PREF_FILTER, null);
-                        editor.apply();
-                        mFilter = null;
-                        refresh();
-                    }
+                (dialog, whichButton) -> {
+                    SharedPreferences.Editor editor =
+                            getPreferences(MODE_PRIVATE)
+                                    .edit();
+                    editor.putString(PREF_FILTER, null);
+                    editor.apply();
+                    mFilter = null;
+                    refresh();
                 });
         alert.setNegativeButton("Cancel",
-                new DialogInterface.OnClickListener() {
-                    public void onClick(DialogInterface dialog, int id) {
-                        dialog.cancel();
-                    }
-                });
+                (dialog, id) -> dialog.cancel());
         alert.show();
     }
 
@@ -404,30 +411,21 @@ public class AppInfoActivity extends AppCompatActivity implements IConstants {
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         builder.setTitle("Settings");
         builder.setMultiChoiceItems(items, states,
-                new DialogInterface.OnMultiChoiceClickListener() {
-                    public void onClick(DialogInterface dialogInterface,
-                                        int item, boolean state) {
-                    }
+                (dialogInterface, item, state) -> {
                 });
-        builder.setPositiveButton("OK", new DialogInterface.OnClickListener() {
-            public void onClick(DialogInterface dialog, int id) {
-                SparseBooleanArray checked = ((AlertDialog) dialog)
-                        .getListView().getCheckedItemPositions();
-                mDoBuildInfo = checked.get(0);
-                mDoMemoryInfo = checked.get(1);
-                mDoPreferredApplications = checked.get(2);
-                mDoNonSystemApps = checked.get(3);
-                mDoSystemApps = checked.get(4);
-                mDoPermissions = checked.get(5);
-                refresh();
-            }
+        builder.setPositiveButton("OK", (dialog, id) -> {
+            SparseBooleanArray checked = ((AlertDialog) dialog)
+                    .getListView().getCheckedItemPositions();
+            mDoBuildInfo = checked.get(0);
+            mDoMemoryInfo = checked.get(1);
+            mDoPreferredApplications = checked.get(2);
+            mDoNonSystemApps = checked.get(3);
+            mDoSystemApps = checked.get(4);
+            mDoPermissions = checked.get(5);
+            refresh();
         });
         builder.setNegativeButton("Cancel",
-                new DialogInterface.OnClickListener() {
-                    public void onClick(DialogInterface dialog, int id) {
-                        dialog.cancel();
-                    }
-                });
+                (dialog, id) -> dialog.cancel());
         builder.create().show();
     }
 
@@ -725,8 +723,8 @@ public class AppInfoActivity extends AppCompatActivity implements IConstants {
                     activities, pi.packageName);
             nFilters = filters.size();
             nActivities = activities.size();
-            Log.d(TAG, pi.packageName + " nPref=" + nPref + " nFilters="
-                    + nFilters + " nActivities=" + nActivities);
+//            Log.d(TAG, pi.packageName + " nPref=" + nPref + " nFilters="
+//                    + nFilters + " nActivities=" + nActivities);
             if (nPref > 0 || nFilters > 0 || nActivities > 0) {
                 // Don't do permissions for these
                 newPi = new PInfo(pi, false);
@@ -956,7 +954,7 @@ public class AppInfoActivity extends AppCompatActivity implements IConstants {
                         }
                     }
                 } catch (Exception ex) {
-                    mPermissionsInfo.append("  Error: ").append(ex.toString())
+                    mPermissionsInfo.append("  Error: ").append(ex)
                             .append("\n");
                 }
             }
@@ -969,7 +967,7 @@ public class AppInfoActivity extends AppCompatActivity implements IConstants {
             sb.append("Version: ").append(versionName).append("\n");
             // Either have mPermissions or mStringBuffer, not both
             if (this.mPermissionsInfo != null) {
-                sb.append(mPermissionsInfo.toString()).append("\n");
+                sb.append(mPermissionsInfo).append("\n");
             }
             if (this.mStringBuffer != null && mStringBuffer.length() > 0) {
                 sb.append(mStringBuffer.toString()).append("\n");
